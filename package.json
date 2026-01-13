@@ -1,0 +1,63 @@
+{
+  "$schema": "https://www.raycast.com/schemas/extension.json",
+  "name": "opencast",
+  "title": "OpenCast",
+  "description": "Interact with OpenCode via Raycast",
+  "icon": "extension-icon.png",
+  "license": "MIT",
+  "commands": [
+    {
+      "name": "ask-opencode",
+      "title": "Ask OpenCode",
+      "subtitle": "OpenCode",
+      "description": "Send a prompt to OpenCode and get a response",
+      "mode": "view"
+    }
+  ],
+  "preferences": [
+    {
+      "name": "serverHost",
+      "title": "OpenCode Server Host",
+      "description": "Hostname of the OpenCode server",
+      "type": "textfield",
+      "default": "127.0.0.1",
+      "required": false
+    },
+    {
+      "name": "serverPort",
+      "title": "OpenCode Server Port",
+      "description": "Port of the OpenCode server",
+      "type": "textfield",
+      "default": "4096",
+      "required": false
+    }
+  ],
+  "dependencies": {
+    "@raycast/api": "^1.103.0",
+    "@raycast/utils": "^2.2.1"
+  },
+  "devDependencies": {
+    "@raycast/eslint-config": "^2.0.4",
+    "@types/node": "22.13.10",
+    "@types/react": "19.0.10",
+    "eslint": "^9.22.0",
+    "prettier": "^3.5.3",
+    "typescript": "^5.8.2"
+  },
+  "scripts": {
+    "dev": "ray develop",
+    "lint": "ray lint",
+    "fix-lint": "ray lint --fix",
+    "build": "ray build",
+    "publish": "npx @raycast/api@latest publish"
+  },
+  "author": "hugo21",
+  "platforms": [
+    "Windows",
+    "macOS"
+  ],
+  "categories": [
+    "Productivity",
+    "Developer Tools"
+  ]
+}
