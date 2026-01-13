@@ -107,10 +107,6 @@ export default function AskOpenCode() {
         enableMarkdown
         autoFocus
       />
-      <Form.Description
-        title="Tips"
-        text="OpenCode is an AI coding agent. Ask it to explain code, add features, fix bugs, or answer programming questions."
-      />
     </Form>
   );
 }
