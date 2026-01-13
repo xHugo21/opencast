@@ -2,6 +2,8 @@
 
 OpenCast is a Raycast extension that allows you to interact with [OpenCode](https://opencode.ai/). It provides an interface to ask questions and manage your conversations directly from Raycast.
 
+<img width="938" height="594" alt="image" src="https://github.com/user-attachments/assets/85d1f9a3-cd51-4c3c-938a-11c541f29069" />
+
 ## Prerequisites
 
 You must have the OpenCode CLI installed and the server running.
