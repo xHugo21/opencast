@@ -12,6 +12,13 @@
       "subtitle": "OpenCode",
       "description": "Send a prompt to OpenCode and get a response",
       "mode": "view"
+    },
+    {
+      "name": "list-opencode-sessions",
+      "title": "List OpenCode Sessions",
+      "subtitle": "OpenCode",
+      "description": "List and continue OpenCode sessions",
+      "mode": "view"
     }
   ],
   "preferences": [
