@@ -30,6 +30,13 @@
       "type": "textfield",
       "default": "4096",
       "required": false
+    },
+    {
+      "name": "serverPassword",
+      "title": "OpenCode Server Password",
+      "description": "Password for basic auth (OPENCODE_SERVER_PASSWORD)",
+      "type": "password",
+      "required": false
     }
   ],
   "dependencies": {
