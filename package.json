@@ -65,7 +65,7 @@
     "build": "ray build",
     "publish": "npx @raycast/api@latest publish"
   },
-  "author": "hugo21",
+  "author": "xHugo21",
   "platforms": [
     "Windows",
     "macOS"
