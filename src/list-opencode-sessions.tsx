@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Detail, Form, Icon, List, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState, useEffect } from "react";
-import { api, extractTextFromParts, Session, Message } from "./api";
+import { api, extractTextFromParts, Session, Message, Provider } from "./api";
 
 function formatDate(dateString: string): string {
   const date = new Date(dateString);
@@ -12,7 +12,17 @@ function formatDate(dateString: string): string {
   });
 }
 
-function SessionDetail({ session }: { session: Session }) {
+function SessionDetail({
+  session,
+  providers,
+  selectedModel,
+  onModelChange,
+}: {
+  session: Session;
+  providers: Provider[];
+  selectedModel: string;
+  onModelChange: (model: string) => void;
+}) {
   const { push } = useNavigation();
   const [messages, setMessages] = useState<Message[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -66,7 +76,18 @@ function SessionDetail({ session }: { session: Session }) {
           <Action
             title="Continue Conversation"
             icon={Icon.Message}
-            onAction={() => push(<ContinueSession session={session} messages={messages} onNewMessage={loadMessages} />)}
+            onAction={() =>
+              push(
+                <ContinueSession
+                  session={session}
+                  messages={messages}
+                  onNewMessage={loadMessages}
+                  providers={providers}
+                  selectedModel={selectedModel}
+                  onModelChange={onModelChange}
+                />,
+              )
+            }
           />
           <Action.CopyToClipboard title="Copy Session ID" content={session.id} />
           <Action
@@ -100,15 +121,21 @@ function ContinueSession({
   session,
   messages,
   onNewMessage,
+  providers,
+  selectedModel,
+  onModelChange,
 }: {
   session: Session;
   messages: Message[];
   onNewMessage: () => void;
+  providers: Provider[];
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }) {
   const { pop } = useNavigation();
   const [isLoading, setIsLoading] = useState(false);
 
-  async function handleSubmit(values: { prompt: string }) {
+  async function handleSubmit(values: { prompt: string; model: string }) {
     if (!values.prompt.trim()) {
       await showToast({ style: Toast.Style.Failure, title: "Please enter a message" });
       return;
@@ -116,8 +143,16 @@ function ContinueSession({
 
     setIsLoading(true);
     try {
+      onModelChange(values.model);
       await showToast({ style: Toast.Style.Animated, title: "Sending message..." });
-      await api.sendMessage(session.id, values.prompt);
+
+      let modelObj;
+      if (values.model) {
+        const [providerID, ...modelParts] = values.model.split("/");
+        modelObj = { providerID, modelID: modelParts.join("/") };
+      }
+
+      await api.sendMessage(session.id, values.prompt, modelObj);
       await showToast({ style: Toast.Style.Success, title: "Message sent" });
       onNewMessage();
       pop();
@@ -141,6 +176,15 @@ function ContinueSession({
     >
       <Form.Description title="Session" text={session.title || session.id} />
       <Form.Description title="Messages" text={`${messages.length} messages in conversation`} />
+      <Form.Dropdown id="model" title="Model" defaultValue={selectedModel}>
+        {providers.map((provider) => (
+          <Form.Dropdown.Section key={provider.id} title={provider.name}>
+            {Object.values(provider.models).map((model) => (
+              <Form.Dropdown.Item key={model.id} value={`${provider.id}/${model.id}`} title={model.name} />
+            ))}
+          </Form.Dropdown.Section>
+        ))}
+      </Form.Dropdown>
       <Form.TextArea id="prompt" title="Message" placeholder="Continue the conversation..." autoFocus />
     </Form>
   );
@@ -151,10 +195,27 @@ export default function BrowseSessions() {
   const [sessions, setSessions] = useState<Session[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isServerOnline, setIsServerOnline] = useState<boolean | null>(null);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
 
   useEffect(() => {
     loadSessions();
+    fetchProviders();
   }, []);
+
+  async function fetchProviders() {
+    try {
+      const response = await api.listProviders();
+      setProviders(response.providers);
+      const firstProvider = response.providers[0];
+      if (firstProvider) {
+        const defaultModelId = response.default[firstProvider.id] || Object.keys(firstProvider.models)[0];
+        setSelectedModel(`${firstProvider.id}/${defaultModelId}`);
+      }
+    } catch (error) {
+      console.error("Failed to fetch providers:", error);
+    }
+  }
 
   async function loadSessions() {
     setIsLoading(true);
@@ -222,7 +283,16 @@ Then try again.`}
                 <Action
                   title="Open Session"
                   icon={Icon.Eye}
-                  onAction={() => push(<SessionDetail session={session} />)}
+                  onAction={() =>
+                    push(
+                      <SessionDetail
+                        session={session}
+                        providers={providers}
+                        selectedModel={selectedModel}
+                        onModelChange={setSelectedModel}
+                      />,
+                    )
+                  }
                 />
                 <Action.CopyToClipboard title="Copy Session ID" content={session.id} />
                 <Action

@@ -1,6 +1,6 @@
 import { Action, ActionPanel, Detail, Form, Icon, showToast, Toast, useNavigation } from "@raycast/api";
 import { useState, useEffect } from "react";
-import { api, extractTextFromParts, Message, Session } from "./api";
+import { api, extractTextFromParts, Message, Session, Provider } from "./api";
 
 interface ConversationMessage {
   role: "user" | "assistant";
@@ -11,10 +11,16 @@ function ConversationView({
   session,
   conversation,
   onSendMessage,
+  providers,
+  selectedModel,
+  onModelChange,
 }: {
   session: Session;
   conversation: ConversationMessage[];
-  onSendMessage: (prompt: string) => Promise<void>;
+  onSendMessage: (prompt: string, model?: string) => Promise<void>;
+  providers: Provider[];
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }) {
   const { push } = useNavigation();
   const [isLoading, setIsLoading] = useState(false);
@@ -33,7 +39,16 @@ function ConversationView({
   }
 
   async function handleContinue() {
-    push(<ContinueConversation session={session} conversation={conversation} onSendMessage={onSendMessage} />);
+    push(
+      <ContinueConversation
+        session={session}
+        conversation={conversation}
+        onSendMessage={onSendMessage}
+        providers={providers}
+        selectedModel={selectedModel}
+        onModelChange={onModelChange}
+      />,
+    );
   }
 
   return (
@@ -65,15 +80,21 @@ function ContinueConversation({
   session,
   conversation,
   onSendMessage,
+  providers,
+  selectedModel,
+  onModelChange,
 }: {
   session: Session;
   conversation: ConversationMessage[];
-  onSendMessage: (prompt: string) => Promise<void>;
+  onSendMessage: (prompt: string, model?: string) => Promise<void>;
+  providers: Provider[];
+  selectedModel: string;
+  onModelChange: (model: string) => void;
 }) {
   const { pop } = useNavigation();
   const [isLoading, setIsLoading] = useState(false);
 
-  async function handleSubmit(values: { prompt: string }) {
+  async function handleSubmit(values: { prompt: string; model: string }) {
     if (!values.prompt.trim()) {
       await showToast({ style: Toast.Style.Failure, title: "Please enter a message" });
       return;
@@ -81,7 +102,8 @@ function ContinueConversation({
 
     setIsLoading(true);
     try {
-      await onSendMessage(values.prompt);
+      onModelChange(values.model);
+      await onSendMessage(values.prompt, values.model);
       pop();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
@@ -103,6 +125,15 @@ function ContinueConversation({
     >
       <Form.Description title="Session" text={session.title || session.id.slice(0, 20)} />
       <Form.Description title="Messages" text={`${conversation.length} messages so far`} />
+      <Form.Dropdown id="model" title="Model" defaultValue={selectedModel}>
+        {providers.map((provider) => (
+          <Form.Dropdown.Section key={provider.id} title={provider.name}>
+            {Object.values(provider.models).map((model) => (
+              <Form.Dropdown.Item key={model.id} value={`${provider.id}/${model.id}`} title={model.name} />
+            ))}
+          </Form.Dropdown.Section>
+        ))}
+      </Form.Dropdown>
       <Form.TextArea id="prompt" title="Message" placeholder="Continue the conversation..." autoFocus enableMarkdown />
     </Form>
   );
@@ -115,9 +146,12 @@ export default function AskOpenCode() {
   const [serverVersion, setServerVersion] = useState<string>("");
   const [currentSession, setCurrentSession] = useState<Session | null>(null);
   const [conversation, setConversation] = useState<ConversationMessage[]>([]);
+  const [providers, setProviders] = useState<Provider[]>([]);
+  const [selectedModel, setSelectedModel] = useState<string>("");
 
   useEffect(() => {
     checkServer();
+    fetchProviders();
   }, []);
 
   async function checkServer() {
@@ -130,7 +164,22 @@ export default function AskOpenCode() {
     }
   }
 
-  async function sendMessage(prompt: string): Promise<void> {
+  async function fetchProviders() {
+    try {
+      const response = await api.listProviders();
+      setProviders(response.providers);
+      // Set default model if available
+      const firstProvider = response.providers[0];
+      if (firstProvider) {
+        const defaultModelId = response.default[firstProvider.id] || Object.keys(firstProvider.models)[0];
+        setSelectedModel(`${firstProvider.id}/${defaultModelId}`);
+      }
+    } catch (error) {
+      console.error("Failed to fetch providers:", error);
+    }
+  }
+
+  async function sendMessage(prompt: string, modelStr?: string): Promise<void> {
     if (!currentSession) {
       throw new Error("No active session");
     }
@@ -139,7 +188,13 @@ export default function AskOpenCode() {
 
     await showToast({ style: Toast.Style.Animated, title: "Sending to OpenCode..." });
 
-    const response = await api.sendMessage(currentSession.id, prompt);
+    let modelObj;
+    if (modelStr) {
+      const [providerID, ...modelParts] = modelStr.split("/");
+      modelObj = { providerID, modelID: modelParts.join("/") };
+    }
+
+    const response = await api.sendMessage(currentSession.id, prompt, modelObj);
     const responseText = extractTextFromParts(response.parts);
 
     setConversation((prev) => [...prev, { role: "assistant", content: responseText || "No response" }]);
@@ -147,13 +202,15 @@ export default function AskOpenCode() {
     await showToast({ style: Toast.Style.Success, title: "Response received" });
   }
 
-  async function handleSubmit(values: { prompt: string }) {
+  async function handleSubmit(values: { prompt: string; model: string }) {
     if (!values.prompt.trim()) {
       await showToast({ style: Toast.Style.Failure, title: "Please enter a prompt" });
       return;
     }
 
     setIsLoading(true);
+    const modelToUse = values.model;
+    setSelectedModel(modelToUse);
 
     try {
       const health = await api.checkHealth();
@@ -171,24 +228,32 @@ export default function AskOpenCode() {
 
       await showToast({ style: Toast.Style.Animated, title: "Sending to OpenCode..." });
 
-      const response = await api.sendMessage(session.id, values.prompt);
+      let modelObj;
+      if (modelToUse) {
+        const [providerID, ...modelParts] = modelToUse.split("/");
+        modelObj = { providerID, modelID: modelParts.join("/") };
+      }
+
+      const response = await api.sendMessage(session.id, values.prompt, modelObj);
       const responseText = extractTextFromParts(response.parts);
 
       const assistantMessage: ConversationMessage = {
         role: "assistant",
         content: responseText || "No response received",
       };
-      setConversation([userMessage, assistantMessage]);
+      const newConversation = [userMessage, assistantMessage];
+      setConversation(newConversation);
 
       await showToast({ style: Toast.Style.Success, title: "Response received" });
 
       push(
         <ConversationView
           session={session}
-          conversation={[userMessage, assistantMessage]}
-          onSendMessage={async (prompt) => {
-            await sendMessage(prompt);
-          }}
+          conversation={newConversation}
+          onSendMessage={sendMessage}
+          providers={providers}
+          selectedModel={modelToUse}
+          onModelChange={setSelectedModel}
         />,
       );
     } catch (error) {
@@ -223,6 +288,17 @@ export default function AskOpenCode() {
       }
     >
       <Form.Description title="OpenCode Status" text={serverStatusText} />
+      {providers.length > 0 && (
+        <Form.Dropdown id="model" title="Model" value={selectedModel} onChange={setSelectedModel}>
+          {providers.map((provider) => (
+            <Form.Dropdown.Section key={provider.id} title={provider.name}>
+              {Object.values(provider.models).map((model) => (
+                <Form.Dropdown.Item key={model.id} value={`${provider.id}/${model.id}`} title={model.name} />
+              ))}
+            </Form.Dropdown.Section>
+          ))}
+        </Form.Dropdown>
+      )}
       <Form.TextArea
         id="prompt"
         title="Prompt"

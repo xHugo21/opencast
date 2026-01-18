@@ -15,6 +15,24 @@ export interface Session {
   parentID?: string;
 }
 
+export interface Model {
+  id: string;
+  name: string;
+  family?: string;
+  status?: string;
+}
+
+export interface Provider {
+  id: string;
+  name: string;
+  models: Record<string, Model>;
+}
+
+export interface ProvidersResponse {
+  providers: Provider[];
+  default: Record<string, string>;
+}
+
 export interface MessagePart {
   type: string;
   content?: string;
@@ -114,20 +132,6 @@ class OpenCodeAPI {
     return response.json() as Promise<boolean>;
   }
 
-  async sendMessage(sessionId: string, prompt: string): Promise<Message> {
-    const response = await fetch(`${this.getBaseUrl()}/session/${sessionId}/message`, {
-      method: "POST",
-      headers: this.getHeaders(),
-      body: JSON.stringify({
-        parts: [{ type: "text", text: prompt }],
-      }),
-    });
-    if (!response.ok) {
-      throw new Error(`Failed to send message: ${response.statusText}`);
-    }
-    return response.json() as Promise<Message>;
-  }
-
   async getMessages(sessionId: string, limit?: number): Promise<Message[]> {
     const url = new URL(`${this.getBaseUrl()}/session/${sessionId}/message`);
     if (limit) {
@@ -151,6 +155,35 @@ class OpenCodeAPI {
       throw new Error(`Failed to abort session: ${response.statusText}`);
     }
     return response.json() as Promise<boolean>;
+  }
+
+  async listProviders(): Promise<ProvidersResponse> {
+    const response = await fetch(`${this.getBaseUrl()}/config/providers`, {
+      headers: this.getHeaders(),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to list providers: ${response.statusText}`);
+    }
+    return response.json() as Promise<ProvidersResponse>;
+  }
+
+  async sendMessage(
+    sessionId: string,
+    prompt: string,
+    model?: { modelID: string; providerID: string },
+  ): Promise<Message> {
+    const response = await fetch(`${this.getBaseUrl()}/session/${sessionId}/message`, {
+      method: "POST",
+      headers: this.getHeaders(),
+      body: JSON.stringify({
+        model,
+        parts: [{ type: "text", text: prompt }],
+      }),
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to send message: ${response.statusText}`);
+    }
+    return response.json() as Promise<Message>;
   }
 }
 
